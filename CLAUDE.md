@@ -25,6 +25,13 @@ src/
   constants.ts   — Nostr event kind constants (5800, 6800, 7000, 31990)
   types.ts       — public TypeScript interfaces
   utils.ts       — hex conversion, secret key validation
+tests/
+  *.test.ts      — unit tests (vitest, mocked dependencies)
+  integration.test.ts — end-to-end tests (real HTTP server, real nostr-tools, no mocks)
+examples/
+  local-demo.ts  — full L402 flow with mock server (zero setup)
+  announce.ts    — publish NIP-89 discovery event
+  serve.ts       — start relay loop
 ```
 
 ## Conventions

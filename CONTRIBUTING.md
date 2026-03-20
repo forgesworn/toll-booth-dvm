@@ -34,7 +34,12 @@ src/
   types.ts       — public TypeScript interfaces
   utils.ts       — hex conversion, key validation
 tests/
-  *.test.ts      — unit tests (vitest)
+  *.test.ts      — unit tests (vitest, mocked dependencies)
+  integration.test.ts — end-to-end tests (real HTTP server, real nostr-tools)
+examples/
+  local-demo.ts  — full L402 flow with mock server (zero setup)
+  announce.ts    — publish NIP-89 discovery event
+  serve.ts       — start relay loop
 ```
 
 ## Code conventions

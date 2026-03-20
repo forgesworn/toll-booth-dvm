@@ -51,3 +51,9 @@ process.on('SIGINT', () => dvm.close())
 - `ServeOptions` — configuration: secretKey, relays, endpoint, allowedPaths, timeouts, limits
 - `BoothConfigLike` — pricing configuration mapped from toll-booth's format
 - `JOB_KIND` (5800), `RESULT_KIND` (6800), `FEEDBACK_KIND` (7000), `HANDLER_KIND` (31990) — Nostr event kind constants
+
+## Examples
+
+- `examples/local-demo.ts` — run the full L402 flow locally with a mock server (zero setup)
+- `examples/announce.ts` — publish a NIP-89 discovery event
+- `examples/serve.ts` — start the relay loop against a real endpoint

@@ -127,6 +127,14 @@ The DVM never holds the bolt11 string for longer than needed — it is relayed d
 
 **No persistent client data.** The DVM does not log or store client pubkeys, job contents, or payment data beyond the in-memory deduplication window (10 minutes). No data is persisted to disk.
 
+## Examples
+
+See [`examples/`](examples/) for runnable scripts:
+
+- **`local-demo.ts`** — full L402 flow with a mock server, zero setup: `npx tsx examples/local-demo.ts`
+- **`announce.ts`** — publish a NIP-89 discovery event
+- **`serve.ts`** — start the relay loop
+
 ## Licence
 
 MIT
