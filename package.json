@@ -1,6 +1,6 @@
 {
   "name": "toll-booth-dvm",
-  "version": "0.0.0-development",
+  "version": "1.0.0",
   "description": "Expose any toll-booth-gated API as a NIP-90 Data Vending Machine on Nostr",
   "type": "module",
   "main": "./build/index.js",
@@ -11,16 +11,30 @@
       "types": "./build/index.d.ts"
     }
   },
-  "files": ["build"],
+  "files": [
+    "build"
+  ],
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "keywords": [
-    "dvm", "nip-90", "nostr", "l402", "lightning", "toll-booth",
-    "data-vending-machine", "paid-api", "api-monetisation", "decentralised",
-    "bitcoin", "micropayments", "paywall", "http-402", "proxy"
+    "dvm",
+    "nip-90",
+    "nostr",
+    "l402",
+    "lightning",
+    "toll-booth",
+    "data-vending-machine",
+    "paid-api",
+    "api-monetisation",
+    "decentralised",
+    "bitcoin",
+    "micropayments",
+    "paywall",
+    "http-402",
+    "proxy"
   ],
   "license": "MIT",
   "homepage": "https://github.com/forgesworn/toll-booth-dvm#readme",
@@ -28,7 +42,9 @@
     "type": "git",
     "url": "git+https://github.com/forgesworn/toll-booth-dvm.git"
   },
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "dependencies": {
     "nostr-tools": "^2.10.0"
   },
