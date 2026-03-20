@@ -63,7 +63,7 @@ function createTollBoothMock(): {
       l402: {
         bolt11: 'lnbc100n1ptest',
         macaroon: 'mac-test-token',
-        payment_hash: 'testhash123',
+        payment_hash: 'ab'.repeat(32),
         amount_sats: 100,
         status_token: 'status-tok-abc',
       },
@@ -127,7 +127,7 @@ describe('integration: proxyRequest against real HTTP server', () => {
     if (result.status === 'payment-required') {
       expect(result.bolt11).toBe('lnbc100n1ptest')
       expect(result.macaroon).toBe('mac-test-token')
-      expect(result.paymentHash).toBe('testhash123')
+      expect(result.paymentHash).toBe('ab'.repeat(32))
       expect(result.amountSats).toBe(100)
       expect(result.statusToken).toBe('status-tok-abc')
     }

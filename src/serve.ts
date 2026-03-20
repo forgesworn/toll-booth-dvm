@@ -2,7 +2,7 @@ import { finalizeEvent, getPublicKey } from 'nostr-tools/pure'
 import { SimplePool } from 'nostr-tools/pool'
 import type { ServeOptions, DvmHandle } from './types.js'
 import { JOB_KIND, RESULT_KIND, FEEDBACK_KIND } from './constants.js'
-import { proxyRequest, validatePath } from './proxy.js'
+import { proxyRequest, validatePath, validateMethod } from './proxy.js'
 import { announce } from './announce.js'
 import { hexToBytes, validateSecretKey } from './utils.js'
 
@@ -12,6 +12,9 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 30_000
 const DEFAULT_PAYMENT_TIMEOUT_MS = 300_000
 const DEFAULT_MAX_BODY_BYTES = 65_536
 const SEEN_TTL_MS = 600_000
+const MAX_SEEN_ENTRIES = 100_000
+const MAX_EVENT_AGE_SECS = 600
+const PAYMENT_HASH_RE = /^[0-9a-f]{64}$/
 
 /**
  * Start the DVM relay loop — subscribes to kind 5800 job requests and proxies
@@ -70,7 +73,11 @@ export async function serve(options: ServeOptions): Promise<DvmHandle> {
       onevent(event: JobEvent) {
         const id = event.id
         if (seen.has(id)) return
-        seen.set(id, Date.now())
+        if (seen.size >= MAX_SEEN_ENTRIES) return
+        const now = Date.now()
+        const eventAge = Math.abs(Math.floor(now / 1000) - event.created_at)
+        if (eventAge > MAX_EVENT_AGE_SECS) return
+        seen.set(id, now)
         if (pending.size >= maxPendingJobs) return
         pending.add(id)
         handleJob(event).finally(() => pending.delete(id))
@@ -82,6 +89,13 @@ export async function serve(options: ServeOptions): Promise<DvmHandle> {
     const params = extractParams(event.tags)
     const controller = new AbortController()
     abortControllers.set(event.id, controller)
+
+    try {
+      validateMethod(params.method)
+    } catch {
+      await publishFeedback(event, 'error', 'method-not-allowed')
+      return
+    }
 
     try {
       validatePath(params.path, allowedPaths)
@@ -115,6 +129,10 @@ export async function serve(options: ServeOptions): Promise<DvmHandle> {
       const bidTag = event.tags.find((t) => t[0] === 'bid')
       if (bidTag) {
         const bidMillisats = parseInt(bidTag[1], 10)
+        if (isNaN(bidMillisats)) {
+          await publishFeedback(event, 'error', 'invalid-bid')
+          return
+        }
         const priceMillisats = result.amountSats * 1000
         if (priceMillisats > bidMillisats) {
           await publishFeedback(event, 'error', 'price-exceeds-bid')
@@ -123,6 +141,11 @@ export async function serve(options: ServeOptions): Promise<DvmHandle> {
       }
 
       await publishPaymentRequired(event, result.amountSats, result.bolt11)
+
+      if (!PAYMENT_HASH_RE.test(result.paymentHash)) {
+        await publishFeedback(event, 'error', 'invalid-payment-hash')
+        return
+      }
 
       const preimage = await pollForPayment(
         endpoint,
@@ -268,7 +291,7 @@ async function pollForPayment(
 
   while (Date.now() < deadline && !signal.aborted) {
     try {
-      const url = `${endpoint.replace(/\/$/, '')}/invoice-status/${paymentHash}?token=${statusToken}`
+      const url = `${endpoint.replace(/\/$/, '')}/invoice-status/${paymentHash}?token=${encodeURIComponent(statusToken)}`
       const response = await fetch(url, { signal })
       if (response.ok) {
         const data = (await response.json()) as { settled?: boolean; preimage?: string }

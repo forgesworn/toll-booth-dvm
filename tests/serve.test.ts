@@ -7,6 +7,7 @@ const {
   mockSubClose,
   mockProxyRequest,
   mockValidatePath,
+  mockValidateMethod,
   mockAnnounce,
   subscribeManyState,
 } = vi.hoisted(() => ({
@@ -14,6 +15,7 @@ const {
   mockSubClose: vi.fn(),
   mockProxyRequest: vi.fn(),
   mockValidatePath: vi.fn(),
+  mockValidateMethod: vi.fn(),
   mockAnnounce: vi.fn().mockResolvedValue({ eventId: 'ann-id', relays: ['wss://r.test'] }),
   subscribeManyState: { callback: undefined as ((event: unknown) => void) | undefined },
 }))
@@ -45,6 +47,7 @@ vi.mock('nostr-tools/pure', () => ({
 vi.mock('../src/proxy.js', () => ({
   proxyRequest: mockProxyRequest,
   validatePath: mockValidatePath,
+  validateMethod: mockValidateMethod,
 }))
 
 vi.mock('../src/announce.js', () => ({
@@ -147,7 +150,7 @@ describe('serve', () => {
       status: 'payment-required',
       bolt11: 'lnbc10n1...',
       macaroon: 'mac123',
-      paymentHash: 'hash123',
+      paymentHash: 'a'.repeat(64),
       amountSats: 500,
       statusToken: 'tok123',
     })
@@ -248,7 +251,7 @@ describe('serve', () => {
       status: 'payment-required',
       bolt11: 'lnbc...',
       macaroon: 'mac',
-      paymentHash: 'hash',
+      paymentHash: 'b'.repeat(64),
       amountSats: 1000,
       statusToken: 'tok',
     })
@@ -288,7 +291,7 @@ describe('serve', () => {
       status: 'payment-required',
       bolt11: 'lnbc...',
       macaroon: 'mac',
-      paymentHash: 'hash',
+      paymentHash: 'b'.repeat(64),
       amountSats: 100,
       statusToken: 'tok',
     })
@@ -362,7 +365,7 @@ describe('serve', () => {
         status: 'payment-required',
         bolt11: 'lnbc...',
         macaroon: 'mac-token',
-        paymentHash: 'pay-hash',
+        paymentHash: 'c'.repeat(64),
         amountSats: 100,
         statusToken: 'status-tok',
       })

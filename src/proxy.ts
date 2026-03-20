@@ -41,15 +41,44 @@ export interface ProxyError {
 /** Discriminated union of all possible proxy outcomes. */
 export type ProxyResult = ProxySuccess | ProxyPaymentRequired | ProxyError
 
+const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
+
 /**
  * Validate a request path against traversal attacks and an optional whitelist.
- * Throws if the path contains `..`, `//`, or is not in the allowed list.
+ * Decodes percent-encoded sequences before checking to prevent `%2e%2e` bypass.
+ * Throws if the path contains `..`, `//`, does not start with `/`, or is not in the allowed list.
  */
 export function validatePath(path: string, allowedPaths?: string[]): void {
+  if (!path.startsWith('/')) throw new Error('Invalid path: must start with /')
+
+  // Decode percent-encoded sequences to catch %2e%2e, %2f, etc.
+  let decoded: string
+  try {
+    decoded = decodeURIComponent(path)
+  } catch {
+    throw new Error('Invalid path: malformed percent encoding')
+  }
+
+  if (decoded.includes('..')) throw new Error('Invalid path: contains ..')
+  if (decoded.includes('//')) throw new Error('Invalid path: contains //')
+
+  // Also check the raw path for double-encoded variants
   if (path.includes('..')) throw new Error('Invalid path: contains ..')
   if (path.includes('//')) throw new Error('Invalid path: contains //')
-  if (allowedPaths && !allowedPaths.includes(path)) {
-    throw new Error(`Path not allowed: ${path}`)
+
+  if (allowedPaths && !allowedPaths.includes(decoded)) {
+    throw new Error(`Path not allowed: ${decoded}`)
+  }
+}
+
+/**
+ * Validate that an HTTP method is in the allowed set.
+ * Prevents forwarding arbitrary methods (e.g. DELETE) to the upstream.
+ */
+export function validateMethod(method: string, allowedMethods?: Set<string>): void {
+  const allowed = allowedMethods ?? ALLOWED_METHODS
+  if (!allowed.has(method.toUpperCase())) {
+    throw new Error(`Method not allowed: ${method}`)
   }
 }
 

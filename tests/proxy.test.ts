@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { proxyRequest, validatePath } from '../src/proxy.js'
+import { proxyRequest, validatePath, validateMethod } from '../src/proxy.js'
 
 describe('validatePath', () => {
   it('allows a simple path', () => {
@@ -16,6 +16,42 @@ describe('validatePath', () => {
   })
   it('allows paths in allowedPaths', () => {
     expect(() => validatePath('/api/isochrone', ['/api/isochrone', '/api/matrix'])).not.toThrow()
+  })
+  it('rejects percent-encoded path traversal (%2e%2e)', () => {
+    expect(() => validatePath('/api/%2e%2e/admin')).toThrow('Invalid path')
+  })
+  it('rejects mixed percent-encoded traversal (.%2e)', () => {
+    expect(() => validatePath('/api/.%2e/admin')).toThrow('Invalid path')
+  })
+  it('rejects percent-encoded double slash (%2f)', () => {
+    expect(() => validatePath('/api/%2f%2fadmin')).toThrow('Invalid path')
+  })
+  it('rejects paths not starting with /', () => {
+    expect(() => validatePath('api/test')).toThrow('must start with /')
+  })
+  it('rejects malformed percent encoding', () => {
+    expect(() => validatePath('/api/%ZZ/test')).toThrow('malformed percent encoding')
+  })
+  it('allowedPaths checks against decoded path', () => {
+    expect(() => validatePath('/api/%69sochrone', ['/api/isochrone'])).not.toThrow()
+  })
+})
+
+describe('validateMethod', () => {
+  it('allows GET', () => {
+    expect(() => validateMethod('GET')).not.toThrow()
+  })
+  it('allows POST', () => {
+    expect(() => validateMethod('POST')).not.toThrow()
+  })
+  it('rejects CONNECT', () => {
+    expect(() => validateMethod('CONNECT')).toThrow('Method not allowed')
+  })
+  it('rejects TRACE', () => {
+    expect(() => validateMethod('TRACE')).toThrow('Method not allowed')
+  })
+  it('rejects OPTIONS', () => {
+    expect(() => validateMethod('OPTIONS')).toThrow('Method not allowed')
   })
 })
 
