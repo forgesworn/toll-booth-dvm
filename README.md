@@ -1,5 +1,7 @@
 # toll-booth-dvm
 
+**Nostr:** [`npub1mgvlrnf5hm9yf0n5mf9nqmvarhvxkc6remu5ec3vf8r0txqkuk7su0e7q2`](https://njump.me/npub1mgvlrnf5hm9yf0n5mf9nqmvarhvxkc6remu5ec3vf8r0txqkuk7su0e7q2)
+
 Expose any [toll-booth](https://github.com/forgesworn/toll-booth)-gated HTTP API as a [NIP-90](https://github.com/nostr-protocol/nips/blob/master/90.md) Data Vending Machine on Nostr.
 
 Clients send kind 5800 job requests over Nostr. The DVM proxies them to your toll-booth endpoint, relays the Lightning invoice, and publishes the result as kind 6800 — without ever holding funds.
