@@ -19,9 +19,11 @@
   },
   "keywords": [
     "dvm", "nip-90", "nostr", "l402", "lightning", "toll-booth",
-    "data-vending-machine", "paid-api", "api-monetisation", "decentralised"
+    "data-vending-machine", "paid-api", "api-monetisation", "decentralised",
+    "bitcoin", "micropayments", "paywall", "http-402", "proxy"
   ],
   "license": "MIT",
+  "homepage": "https://github.com/forgesworn/toll-booth-dvm#readme",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/forgesworn/toll-booth-dvm.git"

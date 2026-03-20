@@ -5,6 +5,16 @@ import { mapBoothConfig } from './mapper.js'
 import { HANDLER_KIND } from './constants.js'
 import { hexToBytes, validateSecretKey } from './utils.js'
 
+/**
+ * Publish a NIP-89 kind 31990 handler event so Nostr clients can discover this DVM.
+ *
+ * Maps the toll-booth pricing configuration into a signed Nostr event and publishes
+ * it to the specified relays. The secret key is zeroised after signing.
+ *
+ * @param boothConfig - Pricing and service metadata from your toll-booth configuration
+ * @param options - Nostr identity, relay list, and optional discovery metadata
+ * @returns The published event ID and relay list
+ */
 export async function announce(
   boothConfig: BoothConfigLike,
   options: AnnounceOptions,

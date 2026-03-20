@@ -13,6 +13,17 @@ const DEFAULT_PAYMENT_TIMEOUT_MS = 300_000
 const DEFAULT_MAX_BODY_BYTES = 65_536
 const SEEN_TTL_MS = 600_000
 
+/**
+ * Start the DVM relay loop — subscribes to kind 5800 job requests and proxies
+ * them to the upstream toll-booth endpoint.
+ *
+ * Handles the full L402 payment flow: relays bolt11 invoices via kind 7000
+ * feedback events, polls for Lightning settlement, and publishes results as
+ * kind 6800. The DVM never holds or forwards funds.
+ *
+ * @param options - Relay list, upstream endpoint, timeouts, and optional announce config
+ * @returns A handle with a `close()` method for graceful shutdown
+ */
 export async function serve(options: ServeOptions): Promise<DvmHandle> {
   validateSecretKey(options.secretKey)
 
