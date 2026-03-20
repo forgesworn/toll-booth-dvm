@@ -99,6 +99,41 @@ describe('proxyRequest', () => {
     }
   })
 
+  it('returns error for malformed 402 response (missing l402 fields)', async () => {
+    mockFetch.mockResolvedValueOnce({
+      status: 402,
+      json: () => Promise.resolve({ error: 'payment required' }),
+      headers: new Headers(),
+    })
+    const result = await proxyRequest({ endpoint: 'https://example.com', method: 'GET', path: '/api/test' })
+    expect(result.status).toBe('error')
+    if (result.status === 'error') {
+      expect(result.statusCode).toBe(402)
+      expect(result.body).toBe('Malformed L402 challenge')
+    }
+  })
+
+  it('returns error for 402 with non-numeric amount_sats', async () => {
+    mockFetch.mockResolvedValueOnce({
+      status: 402,
+      json: () => Promise.resolve({
+        l402: {
+          bolt11: 'lnbc...',
+          macaroon: 'mac',
+          payment_hash: 'hash',
+          amount_sats: 'not-a-number',
+          status_token: 'tok',
+        },
+      }),
+      headers: new Headers(),
+    })
+    const result = await proxyRequest({ endpoint: 'https://example.com', method: 'GET', path: '/api/test' })
+    expect(result.status).toBe('error')
+    if (result.status === 'error') {
+      expect(result.body).toBe('Malformed L402 challenge')
+    }
+  })
+
   it('retries with L402 auth header when credentials provided', async () => {
     mockFetch.mockResolvedValueOnce({
       status: 200,

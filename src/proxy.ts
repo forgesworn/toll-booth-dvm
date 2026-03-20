@@ -115,7 +115,17 @@ export async function proxyRequest(options: ProxyRequestOptions): Promise<ProxyR
 
     if (response.status === 402) {
       const json = await response.json()
-      const l402Data = json.l402
+      const l402Data = json?.l402
+      if (
+        typeof l402Data?.bolt11 !== 'string' ||
+        typeof l402Data?.macaroon !== 'string' ||
+        typeof l402Data?.payment_hash !== 'string' ||
+        typeof l402Data?.amount_sats !== 'number' ||
+        typeof l402Data?.status_token !== 'string' ||
+        !Number.isFinite(l402Data.amount_sats)
+      ) {
+        return { status: 'error', statusCode: 402, body: 'Malformed L402 challenge' }
+      }
       return {
         status: 'payment-required',
         bolt11: l402Data.bolt11,
