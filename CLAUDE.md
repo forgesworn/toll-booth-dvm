@@ -44,9 +44,12 @@ examples/
 
 ## Key implementation details
 
-- Secret keys are zeroised after use (`sk.fill(0)`)
-- Deduplication via in-memory seen map with 10-minute TTL
-- Path traversal prevention (rejects `..` and `//`)
+- Secret keys are zeroised after use (`sk.fill(0)`) — the hex string cannot be zeroised (JS strings are immutable)
+- Deduplication via in-memory seen map with 10-minute TTL, capped at 100k entries
+- Path validation: decodes percent-encoding before checking for `..` and `//` traversal
+- HTTP method validation: only GET/POST/PUT/PATCH/DELETE forwarded to upstream
+- Event age validation: rejects events with `created_at` >10 minutes from now
+- Payment hash validated as 64-char hex before polling; statusToken URL-encoded in query string
 - Non-custodial: bolt11 strings are relayed, never stored beyond the request lifecycle
 - L402 credential format: `L402 {macaroon}:{preimage}`
 

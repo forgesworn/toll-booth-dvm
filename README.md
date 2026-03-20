@@ -127,6 +127,8 @@ The DVM never holds the bolt11 string for longer than needed — it is relayed d
 
 **No persistent client data.** The DVM does not log or store client pubkeys, job contents, or payment data beyond the in-memory deduplication window (10 minutes). No data is persisted to disk.
 
+**Input validation.** All client-supplied paths are percent-decoded and validated against traversal attacks before forwarding. HTTP methods are restricted to GET/POST/PUT/PATCH/DELETE. Events older than 10 minutes are rejected. Payment hashes are validated as 64-character hex strings.
+
 ## Examples
 
 See [`examples/`](examples/) for runnable scripts:
