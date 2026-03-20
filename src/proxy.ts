@@ -1,9 +1,11 @@
+/** Options for a single proxied HTTP request to the upstream toll-booth endpoint. */
 export interface ProxyRequestOptions {
   endpoint: string
   method: string
   path: string
   body?: string
   accept?: string
+  /** L402 credential for authenticated retries after payment. */
   l402?: { macaroon: string; preimage: string }
   maxBodyBytes?: number
   timeoutMs?: number
@@ -12,12 +14,14 @@ export interface ProxyRequestOptions {
   proxy?: string
 }
 
+/** Upstream returned a 2xx response. */
 export interface ProxySuccess {
   status: 'success'
   body: string
   contentType: string
 }
 
+/** Upstream returned HTTP 402 with an L402 challenge. */
 export interface ProxyPaymentRequired {
   status: 'payment-required'
   bolt11: string
@@ -27,14 +31,20 @@ export interface ProxyPaymentRequired {
   statusToken: string
 }
 
+/** Upstream returned a non-2xx, non-402 error. */
 export interface ProxyError {
   status: 'error'
   statusCode: number
   body: string
 }
 
+/** Discriminated union of all possible proxy outcomes. */
 export type ProxyResult = ProxySuccess | ProxyPaymentRequired | ProxyError
 
+/**
+ * Validate a request path against traversal attacks and an optional whitelist.
+ * Throws if the path contains `..`, `//`, or is not in the allowed list.
+ */
 export function validatePath(path: string, allowedPaths?: string[]): void {
   if (path.includes('..')) throw new Error('Invalid path: contains ..')
   if (path.includes('//')) throw new Error('Invalid path: contains //')
@@ -43,6 +53,10 @@ export function validatePath(path: string, allowedPaths?: string[]): void {
   }
 }
 
+/**
+ * Send an HTTP request to the upstream toll-booth endpoint and return
+ * the result as a discriminated union: success, payment-required, or error.
+ */
 export async function proxyRequest(options: ProxyRequestOptions): Promise<ProxyResult> {
   const { endpoint, method, path, body, accept, l402, maxBodyBytes, timeoutMs } = options
 
