@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/forgesworn/toll-booth-dvm/compare/v1.0.1...v1.1.0) (2026-03-24)
+
+
+### Features
+
+* auto-derive IETF Payment method from ietfPayment config ([abc0743](https://github.com/forgesworn/toll-booth-dvm/commit/abc0743b7015cfec13e5907184c4f41bc1462300))
+
 ## [1.0.1](https://github.com/forgesworn/toll-booth-dvm/compare/v1.0.0...v1.0.1) (2026-03-24)
 
 
