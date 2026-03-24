@@ -278,7 +278,7 @@ describe('serve', () => {
       (call) => {
         const evt = call[1] as { kind: number; tags: string[][] }
         return evt.kind === FEEDBACK_KIND &&
-          evt.tags.some((t: string[]) => t[0] === 'message' && t[1] === 'price-exceeds-bid')
+          evt.tags.some((t: string[]) => t[0] === 'status' && t[1] === 'error' && t[2] === 'price-exceeds-bid')
       },
     )
     expect(errorCall).toBeDefined()
@@ -317,7 +317,7 @@ describe('serve', () => {
       (call) => {
         const evt = call[1] as { kind: number; tags: string[][] }
         return evt.kind === FEEDBACK_KIND &&
-          evt.tags.some((t: string[]) => t[0] === 'message' && t[1] === 'payment-timeout')
+          evt.tags.some((t: string[]) => t[0] === 'status' && t[1] === 'error' && t[2] === 'payment-timeout')
       },
     )
     expect(timeoutCall).toBeDefined()
@@ -351,7 +351,7 @@ describe('serve', () => {
       (call) => {
         const evt = call[1] as { kind: number; tags: string[][] }
         return evt.kind === FEEDBACK_KIND &&
-          evt.tags.some((t: string[]) => t[0] === 'message' && t[1] === 'invalid-path')
+          evt.tags.some((t: string[]) => t[0] === 'status' && t[1] === 'error' && t[2] === 'invalid-path')
       },
     )
     expect(errorCall).toBeDefined()
@@ -378,7 +378,7 @@ describe('serve', () => {
     // Mock fetch for polling — settles immediately
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ settled: true, preimage: 'preimage-abc' }),
+      json: () => Promise.resolve({ settled: true, preimage: 'd'.repeat(64) }),
     })
     vi.stubGlobal('fetch', mockFetch)
 
@@ -396,7 +396,7 @@ describe('serve', () => {
     // Second proxyRequest call should include L402 credentials
     expect(mockProxyRequest).toHaveBeenCalledTimes(2)
     const secondCall = mockProxyRequest.mock.calls[1][0]
-    expect(secondCall.l402).toEqual({ macaroon: 'mac-token', preimage: 'preimage-abc' })
+    expect(secondCall.l402).toEqual({ macaroon: 'mac-token', preimage: 'd'.repeat(64) })
 
     // Result should be published
     const resultCall = mockPublish.mock.calls.find(

@@ -62,12 +62,16 @@ export interface ServeOptions {
   allowedPaths?: string[]
   /** Max request body size in bytes. Default: 65536. */
   maxBodyBytes?: number
+  /** Max upstream response size in bytes. Default: 1048576 (1 MB). */
+  maxResponseBytes?: number
   /** SOCKS5 proxy URL (stub — not yet implemented). */
   proxy?: string
 }
 
 /** Handle returned by `serve()` for graceful shutdown. */
 export interface DvmHandle {
+  /** @internal prevents GC of key material before close() is called. */
+  _sentinel: object
   /** Stop the relay loop, cancel pending jobs, and zeroises the secret key. */
   close(): Promise<void>
 }

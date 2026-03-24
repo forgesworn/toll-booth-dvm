@@ -1,3 +1,6 @@
+const DEFAULT_MAX_RESPONSE_BYTES = 1_048_576 // 1 MB
+const BOLT11_PREFIX_RE = /^ln(bc|tb|bcrt)/
+
 /** Options for a single proxied HTTP request to the upstream toll-booth endpoint. */
 export interface ProxyRequestOptions {
   endpoint: string
@@ -8,6 +11,8 @@ export interface ProxyRequestOptions {
   /** L402 credential for authenticated retries after payment. */
   l402?: { macaroon: string; preimage: string }
   maxBodyBytes?: number
+  /** Max upstream response size in bytes. Default: 1 MB. */
+  maxResponseBytes?: number
   timeoutMs?: number
   // NOTE: proxy support is a stub in v1. Node.js fetch() does not natively
   // support SOCKS5. Real Tor proxy support requires undici or socks-proxy-agent.
@@ -82,12 +87,21 @@ export function validateMethod(method: string, allowedMethods?: Set<string>): vo
   }
 }
 
+async function readResponseText(response: { text(): Promise<string> }, maxBytes: number): Promise<string> {
+  const text = await response.text()
+  if (Buffer.byteLength(text) > maxBytes) {
+    throw new Error(`Response exceeds maximum size of ${maxBytes} bytes`)
+  }
+  return text
+}
+
 /**
  * Send an HTTP request to the upstream toll-booth endpoint and return
  * the result as a discriminated union: success, payment-required, or error.
  */
 export async function proxyRequest(options: ProxyRequestOptions): Promise<ProxyResult> {
-  const { endpoint, method, path, body, accept, l402, maxBodyBytes, timeoutMs } = options
+  const { endpoint, method, path, body, accept, l402, maxBodyBytes, timeoutMs,
+    maxResponseBytes = DEFAULT_MAX_RESPONSE_BYTES } = options
 
   if (body && maxBodyBytes && Buffer.byteLength(body) > maxBodyBytes) {
     throw new Error(`Body exceeds maximum size of ${maxBodyBytes} bytes`)
@@ -122,7 +136,9 @@ export async function proxyRequest(options: ProxyRequestOptions): Promise<ProxyR
         typeof l402Data?.payment_hash !== 'string' ||
         typeof l402Data?.amount_sats !== 'number' ||
         typeof l402Data?.status_token !== 'string' ||
-        !Number.isFinite(l402Data.amount_sats)
+        !Number.isFinite(l402Data.amount_sats) ||
+        l402Data.amount_sats <= 0 ||
+        !BOLT11_PREFIX_RE.test(l402Data.bolt11)
       ) {
         return { status: 'error', statusCode: 402, body: 'Malformed L402 challenge' }
       }
@@ -139,7 +155,7 @@ export async function proxyRequest(options: ProxyRequestOptions): Promise<ProxyR
     if (response.status >= 200 && response.status < 300) {
       return {
         status: 'success',
-        body: await response.text(),
+        body: await readResponseText(response, maxResponseBytes),
         contentType: response.headers.get('content-type') ?? 'application/octet-stream',
       }
     }
@@ -147,7 +163,7 @@ export async function proxyRequest(options: ProxyRequestOptions): Promise<ProxyR
     return {
       status: 'error',
       statusCode: response.status,
-      body: await response.text(),
+      body: await readResponseText(response, maxResponseBytes),
     }
   } finally {
     if (timeout) clearTimeout(timeout)

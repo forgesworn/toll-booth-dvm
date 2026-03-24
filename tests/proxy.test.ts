@@ -134,6 +134,48 @@ describe('proxyRequest', () => {
     }
   })
 
+  it('returns error for 402 with negative amount_sats', async () => {
+    mockFetch.mockResolvedValueOnce({
+      status: 402,
+      json: () => Promise.resolve({
+        l402: {
+          bolt11: 'lnbc...',
+          macaroon: 'mac',
+          payment_hash: 'a'.repeat(64),
+          amount_sats: -1,
+          status_token: 'tok',
+        },
+      }),
+      headers: new Headers(),
+    })
+    const result = await proxyRequest({ endpoint: 'https://example.com', method: 'GET', path: '/api/test' })
+    expect(result.status).toBe('error')
+    if (result.status === 'error') {
+      expect(result.body).toBe('Malformed L402 challenge')
+    }
+  })
+
+  it('returns error for 402 with zero amount_sats', async () => {
+    mockFetch.mockResolvedValueOnce({
+      status: 402,
+      json: () => Promise.resolve({
+        l402: {
+          bolt11: 'lnbc...',
+          macaroon: 'mac',
+          payment_hash: 'a'.repeat(64),
+          amount_sats: 0,
+          status_token: 'tok',
+        },
+      }),
+      headers: new Headers(),
+    })
+    const result = await proxyRequest({ endpoint: 'https://example.com', method: 'GET', path: '/api/test' })
+    expect(result.status).toBe('error')
+    if (result.status === 'error') {
+      expect(result.body).toBe('Malformed L402 challenge')
+    }
+  })
+
   it('retries with L402 auth header when credentials provided', async () => {
     mockFetch.mockResolvedValueOnce({
       status: 200,
@@ -156,6 +198,38 @@ describe('proxyRequest', () => {
     await expect(
       proxyRequest({ endpoint: 'https://example.com', method: 'POST', path: '/api/test', body: 'x'.repeat(100), maxBodyBytes: 50 }),
     ).rejects.toThrow('Body exceeds maximum size')
+  })
+
+  it('rejects response exceeding maxResponseBytes', async () => {
+    mockFetch.mockResolvedValueOnce({
+      status: 200,
+      text: () => Promise.resolve('x'.repeat(200)),
+      headers: new Headers({ 'content-type': 'text/plain' }),
+    })
+    await expect(
+      proxyRequest({ endpoint: 'https://example.com', method: 'GET', path: '/api/test', maxResponseBytes: 100 }),
+    ).rejects.toThrow('Response exceeds maximum size of 100 bytes')
+  })
+
+  it('returns error for 402 with invalid bolt11 prefix', async () => {
+    mockFetch.mockResolvedValueOnce({
+      status: 402,
+      json: () => Promise.resolve({
+        l402: {
+          bolt11: 'invalid-prefix...',
+          macaroon: 'mac',
+          payment_hash: 'a'.repeat(64),
+          amount_sats: 100,
+          status_token: 'tok',
+        },
+      }),
+      headers: new Headers(),
+    })
+    const result = await proxyRequest({ endpoint: 'https://example.com', method: 'GET', path: '/api/test' })
+    expect(result.status).toBe('error')
+    if (result.status === 'error') {
+      expect(result.body).toBe('Malformed L402 challenge')
+    }
   })
 
   it('returns error for non-402/non-2xx responses', async () => {

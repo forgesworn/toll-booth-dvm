@@ -15,6 +15,7 @@ const SEEN_TTL_MS = 600_000
 const MAX_SEEN_ENTRIES = 100_000
 const MAX_EVENT_AGE_SECS = 600
 const PAYMENT_HASH_RE = /^[0-9a-f]{64}$/
+const skRegistry = new FinalizationRegistry<Uint8Array>((sk) => sk.fill(0))
 
 /**
  * Start the DVM relay loop — subscribes to kind 5800 job requests and proxies
@@ -39,10 +40,16 @@ export async function serve(options: ServeOptions): Promise<DvmHandle> {
     paymentTimeoutMs = DEFAULT_PAYMENT_TIMEOUT_MS,
     allowedPaths,
     maxBodyBytes = DEFAULT_MAX_BODY_BYTES,
+    maxResponseBytes,
   } = options
 
   const sk = hexToBytes(options.secretKey)
   const dvmPubkey = getPublicKey(sk)
+  const relayHint = relays[0] ?? ''
+
+  // Backstop: zeroise sk if the handle is garbage-collected without calling close()
+  const sentinel = {}
+  skRegistry.register(sentinel, sk, sentinel)
 
   const seen = new Map<string, number>()
   const pending = new Set<string>()
@@ -112,6 +119,7 @@ export async function serve(options: ServeOptions): Promise<DvmHandle> {
         body: params.body,
         accept: params.accept,
         maxBodyBytes,
+        maxResponseBytes,
         timeoutMs: requestTimeoutMs,
       })
 
@@ -169,11 +177,12 @@ export async function serve(options: ServeOptions): Promise<DvmHandle> {
         accept: params.accept,
         l402: { macaroon: result.macaroon, preimage },
         maxBodyBytes,
+        maxResponseBytes,
         timeoutMs: requestTimeoutMs,
       })
 
       if (paidResult.status === 'success') {
-        await publishResult(event, paidResult.body)
+        await publishResult(event, paidResult.body, result.amountSats)
       } else {
         await publishFeedback(event, 'error', 'upstream-error-after-payment')
       }
@@ -185,12 +194,12 @@ export async function serve(options: ServeOptions): Promise<DvmHandle> {
   }
 
   function publishFeedback(event: JobEvent, status: string, message?: string): Promise<unknown> {
+    const statusTag = message ? ['status', status, message] : ['status', status]
     const tags: string[][] = [
-      ['e', event.id],
+      ['e', event.id, relayHint],
       ['p', event.pubkey],
-      ['status', status],
+      statusTag,
     ]
-    if (message) tags.push(['message', message])
     const feedbackEvent = finalizeEvent(
       { kind: FEEDBACK_KIND, content: '', tags, created_at: Math.floor(Date.now() / 1000) },
       sk,
@@ -205,7 +214,7 @@ export async function serve(options: ServeOptions): Promise<DvmHandle> {
         kind: FEEDBACK_KIND,
         content: '',
         tags: [
-          ['e', event.id],
+          ['e', event.id, relayHint],
           ['p', event.pubkey],
           ['status', 'payment-required'],
           ['amount', amountMillisats, bolt11],
@@ -217,15 +226,18 @@ export async function serve(options: ServeOptions): Promise<DvmHandle> {
     return Promise.all(pool.publish(relays, feedbackEvent))
   }
 
-  function publishResult(event: JobEvent, body: string): Promise<unknown> {
+  function publishResult(event: JobEvent, body: string, amountSats?: number): Promise<unknown> {
+    const tags: string[][] = [
+      ['e', event.id, relayHint],
+      ['p', event.pubkey],
+      ['request', JSON.stringify(event)],
+    ]
+    if (amountSats !== undefined) tags.push(['amount', String(amountSats * 1000)])
     const resultEvent = finalizeEvent(
       {
         kind: RESULT_KIND,
         content: body,
-        tags: [
-          ['e', event.id],
-          ['p', event.pubkey],
-        ],
+        tags,
         created_at: Math.floor(Date.now() / 1000),
       },
       sk,
@@ -234,7 +246,9 @@ export async function serve(options: ServeOptions): Promise<DvmHandle> {
   }
 
   return {
+    _sentinel: sentinel, // prevent GC while handle is alive
     async close() {
+      skRegistry.unregister(sentinel)
       clearInterval(evictInterval)
       sub.close()
       for (const controller of abortControllers.values()) {
@@ -295,7 +309,7 @@ async function pollForPayment(
       const response = await fetch(url, { signal })
       if (response.ok) {
         const data = (await response.json()) as { settled?: boolean; preimage?: string }
-        if (data.settled && data.preimage) return data.preimage
+        if (data.settled && data.preimage && PAYMENT_HASH_RE.test(data.preimage)) return data.preimage
       }
     } catch {
       // Network error — retry
