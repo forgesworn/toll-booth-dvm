@@ -1,3 +1,10 @@
+## [1.0.1](https://github.com/forgesworn/toll-booth-dvm/compare/v1.0.0...v1.0.1) (2026-03-24)
+
+
+### Bug Fixes
+
+* harden NIP-90 compliance and security posture ([7123f38](https://github.com/forgesworn/toll-booth-dvm/commit/7123f38d7f1a81f5655217cb69ad77b3610c7b0b))
+
 # 1.0.0 (2026-03-20)
 
 
