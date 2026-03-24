@@ -51,6 +51,7 @@ export function mapBoothConfig(
 
   const paymentMethods: string[] = []
   if (boothConfig.hasBackend !== false) paymentMethods.push('lightning')
+  if (boothConfig.ietfPayment) paymentMethods.push('payment')
   if (boothConfig.xcashu) paymentMethods.push('cashu')
   if (paymentMethods.length === 0) paymentMethods.push('lightning')
 

@@ -14,6 +14,8 @@ export interface BoothConfigLike {
   hasBackend?: boolean
   /** Cashu mint configuration for ecash payments. */
   xcashu?: { mints: string[] }
+  /** IETF Payment authentication configuration (draft-ryan-httpauth-payment-01). */
+  ietfPayment?: { realm: string }
 }
 
 /** Options for publishing a NIP-89 kind 31990 handler event. */
