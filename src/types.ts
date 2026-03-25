@@ -82,6 +82,8 @@ export interface DvmHandle {
 export interface Announcement {
   /** Nostr event ID of the published kind 31990 event. */
   eventId: string
+  /** Nostr event ID of the published kind 31402 paid service announcement. */
+  paidServiceEventId: string
   /** Relays the event was published to. */
   relays: string[]
 }

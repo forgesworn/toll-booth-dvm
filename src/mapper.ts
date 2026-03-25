@@ -80,6 +80,70 @@ export function mapBoothConfig(
   }
 }
 
+/**
+ * Map a toll-booth config to a kind 31402 paid service announcement.
+ * Tags carry all discovery-relevant metadata for relay-side filtering.
+ */
+export interface MappedPaidService {
+  tags: string[][]
+  content: string
+}
+
+export function mapPaidServices(
+  boothConfig: BoothConfigLike,
+  options: AnnounceOptions,
+): MappedPaidService {
+  const mapped = mapBoothConfig(boothConfig, options)
+  const name = boothConfig.serviceName ?? 'toll-booth-dvm'
+  const identifier = options.identifier ?? slugify(name)
+
+  const tags: string[][] = [
+    ['d', identifier],
+    ['name', name],
+    ['alt', `Paid API: ${name}`],
+  ]
+
+  for (const url of options.urls) {
+    tags.push(['url', url])
+  }
+
+  tags.push(['summary', options.about])
+
+  // Payment method identifier tags
+  for (const method of mapped.content.paymentMethods) {
+    if (method === 'lightning') tags.push(['pmi', 'l402', 'lightning'])
+    else if (method === 'cashu') tags.push(['pmi', 'xcashu'])
+    else if (method === 'payment') tags.push(['pmi', 'l402', 'lightning'])
+  }
+
+  // Per-capability pricing tags
+  for (const entry of mapped.content.pricing) {
+    tags.push(['price', entry.capability, String(entry.price), entry.currency])
+  }
+
+  if (options.topics) {
+    for (const topic of options.topics) {
+      tags.push(['t', topic])
+    }
+  }
+
+  if (options.picture) tags.push(['picture', options.picture])
+
+  // Content: capabilities array for programmatic consumers
+  const capabilities = mapped.content.pricing.map((entry) => ({
+    name: entry.capability,
+    description: `${entry.capability} endpoint`,
+    endpoint: entry.capability,
+  }))
+
+  const content = JSON.stringify({
+    capabilities,
+    ...(options.version && { version: options.version }),
+  })
+
+  return { tags, content }
+}
+
 function isPriceInfo(value: unknown): value is PriceInfo {
   return typeof value === 'object' && value !== null && ('sats' in value || 'usd' in value)
 }

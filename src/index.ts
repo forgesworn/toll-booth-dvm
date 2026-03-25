@@ -8,5 +8,5 @@ export type {
   Announcement,
   PriceInfo,
 } from './types.js'
-export { JOB_KIND, RESULT_KIND, FEEDBACK_KIND, HANDLER_KIND } from './constants.js'
+export { JOB_KIND, RESULT_KIND, FEEDBACK_KIND, HANDLER_KIND, PAID_SERVICES_KIND } from './constants.js'
 export { hexToBytes } from './utils.js'

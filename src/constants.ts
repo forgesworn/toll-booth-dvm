@@ -9,3 +9,6 @@ export const FEEDBACK_KIND = 7000
 
 /** NIP-89 application handler kind (DVM discovery). */
 export const HANDLER_KIND = 31990
+
+/** Kind 31402 paid API service announcement (NIP-PAID-SERVICES). */
+export const PAID_SERVICES_KIND = 31402
