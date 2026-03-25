@@ -1,0 +1,264 @@
+# toll-booth-dvm
+
+> Connecting paid HTTP APIs to Nostr's AI marketplace is hard — you need to handle NIP-90 job events, relay Lightning invoices, poll for settlement, and publish results, all without holding funds. toll-booth-dvm is a TypeScript library that bridges any toll-booth-gated API to Nostr as a Data Vending Machine (DVM).
+
+Operators who already gate their APIs with `@forgesworn/toll-booth` can expose them to Nostr clients with two function calls: `announce` (publish a NIP-89 discovery event) and `serve` (start the relay loop). The DVM handles the full L402 payment flow — relaying bolt11 invoices, polling for settlement, retrying with credentials — without ever holding or forwarding funds.
+
+## Install
+
+```
+npm install toll-booth-dvm
+```
+
+Single runtime dependency: `nostr-tools`.
+
+---
+
+## Quick start
+
+```typescript
+import { serve } from 'toll-booth-dvm'
+
+const dvm = await serve({
+  secretKey: process.env.NOSTR_SK!,
+  relays: ['wss://relay.damus.io', 'wss://nos.lol'],
+  endpoint: 'http://localhost:3000',
+  announceOnStart: true,
+  boothConfig: {
+    serviceName: 'My Routing API',
+    pricing: { '/route': 10 },
+  },
+  about: 'Lightning-paid routing API',
+})
+
+process.on('SIGINT', () => dvm.close())
+```
+
+---
+
+## Full API Reference
+
+### `announce(boothConfig, options): Promise<Announcement>`
+
+Publish a NIP-89 kind 31990 handler event and a kind 31402 paid service announcement. Maps the toll-booth pricing configuration into signed Nostr events and publishes them to the specified relays. The secret key is zeroised after signing.
+
+```typescript
+import { announce } from 'toll-booth-dvm'
+
+const result = await announce(
+  {
+    serviceName: 'My Routing API',
+    pricing: {
+      '/route': 10,              // 10 sats
+      '/isochrone': { sats: 5, usd: 0.01 },
+    },
+  },
+  {
+    secretKey: process.env.NOSTR_SK!,
+    relays: ['wss://relay.damus.io'],
+    urls: ['https://routing.example.com'],
+    about: 'Lightning-paid routing API using OpenStreetMap data',
+    topics: ['routing', 'maps', 'openstreetmap'],
+    identifier: 'my-routing-api',   // NIP-89 d-tag (defaults to slugified serviceName)
+    picture: 'https://example.com/icon.png',
+    version: '1.0.0',
+  }
+)
+
+// result.eventId           — kind 31990 event ID
+// result.paidServiceEventId — kind 31402 event ID
+// result.relays            — relay list the events were published to
+```
+
+Parameters — `AnnounceOptions`:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `secretKey` | `string` | Yes | Hex-encoded 32-byte Nostr secret key. Zeroised after signing. |
+| `relays` | `string[]` | Yes | Nostr relay URLs to publish to (at least one required) |
+| `urls` | `string[]` | Yes | Public URLs where the toll-booth endpoint is reachable |
+| `about` | `string` | Yes | Human-readable service description |
+| `topics` | `string[]?` | No | Topic tags for discoverability (e.g. `['routing', 'maps']`) |
+| `identifier` | `string?` | No | NIP-89 `d` tag — defaults to slugified service name |
+| `picture` | `string?` | No | Profile picture URL for the DVM |
+| `version` | `string?` | No | Semantic version string |
+
+Returns `Announcement`:
+
+```typescript
+interface Announcement {
+  eventId: string           // Nostr event ID of the kind 31990 event
+  paidServiceEventId: string // Nostr event ID of the kind 31402 event
+  relays: string[]          // Relays the events were published to
+}
+```
+
+---
+
+### `serve(options): Promise<DvmHandle>`
+
+Start the DVM relay loop. Subscribes to kind 5800 job requests tagged with the DVM's pubkey, proxies them to the upstream toll-booth endpoint, handles the full L402 payment flow, and publishes kind 6800 results.
+
+```typescript
+import { serve } from 'toll-booth-dvm'
+
+const dvm = await serve({
+  secretKey: process.env.NOSTR_SK!,
+  relays: ['wss://relay.damus.io', 'wss://nos.lol'],
+  endpoint: 'https://routing.example.com',
+  about: 'Lightning-paid routing API',
+  announceOnStart: true,
+  boothConfig: {
+    serviceName: 'Routing API',
+    pricing: { '/route': 10, '/isochrone': 5 },
+  },
+  allowedPaths: ['/route', '/isochrone'],
+  maxPendingJobs: 10,
+  requestTimeoutMs: 30_000,
+  paymentTimeoutMs: 300_000,
+  pollIntervalMs: 2_000,
+  maxBodyBytes: 65_536,
+  maxResponseBytes: 1_048_576,
+})
+
+// Graceful shutdown
+await dvm.close()
+```
+
+Parameters — `ServeOptions`:
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `secretKey` | `string` | — | Hex-encoded 32-byte Nostr secret key. Zeroised on `close()`. |
+| `relays` | `string[]` | — | Nostr relay URLs to subscribe on |
+| `endpoint` | `string` | — | Upstream toll-booth base URL (e.g. `'http://localhost:3000'`) |
+| `about` | `string?` | — | Service description used in announcements |
+| `announceOnStart` | `boolean?` | `false` | Publish a kind 31990 handler event on startup |
+| `boothConfig` | `BoothConfigLike?` | — | Required if `announceOnStart` is true |
+| `pollIntervalMs` | `number?` | `2000` | Lightning settlement poll interval in ms |
+| `maxPendingJobs` | `number?` | `10` | Max concurrent in-flight jobs |
+| `requestTimeoutMs` | `number?` | `30000` | Upstream HTTP request timeout in ms |
+| `paymentTimeoutMs` | `number?` | `300000` | Time to wait for Lightning settlement in ms |
+| `allowedPaths` | `string[]?` | (all) | Whitelist of permitted request paths |
+| `maxBodyBytes` | `number?` | `65536` | Max request body size in bytes |
+| `maxResponseBytes` | `number?` | `1048576` | Max upstream response size in bytes (1 MB) |
+| `proxy` | `string?` | — | SOCKS5 proxy URL (stub — not yet implemented) |
+
+Returns `DvmHandle`:
+
+```typescript
+interface DvmHandle {
+  close(): Promise<void>  // Stop relay loop, cancel pending jobs, zeroise secret key
+}
+```
+
+---
+
+## L402 payment flow
+
+When a client sends a kind 5800 job request:
+
+1. DVM proxies the request to the upstream toll-booth endpoint.
+2. If the upstream returns HTTP 200: DVM publishes kind 6800 result immediately.
+3. If the upstream returns HTTP 402: DVM publishes a kind 7000 feedback event with `status: payment-required` and the bolt11 invoice.
+4. DVM polls the upstream `/invoice-status/{paymentHash}?token={statusToken}` endpoint until settled or timed out.
+5. Once settled: DVM retries the request with `L402 {macaroon}:{preimage}` credentials.
+6. On success: DVM publishes the kind 6800 result.
+
+The DVM is non-custodial — bolt11 strings are relayed but never stored beyond the request lifecycle.
+
+Optional bid validation: if the client includes a `bid` tag (millisats), the DVM rejects jobs where the required payment exceeds the bid.
+
+---
+
+## Nostr event kinds
+
+```typescript
+import { JOB_KIND, RESULT_KIND, FEEDBACK_KIND, HANDLER_KIND, PAID_SERVICES_KIND } from 'toll-booth-dvm'
+
+JOB_KIND          // 5800  — NIP-90 job request
+RESULT_KIND       // 6800  — NIP-90 job result
+FEEDBACK_KIND     // 7000  — NIP-90 status/payment feedback
+HANDLER_KIND      // 31990 — NIP-89 application handler (DVM discovery)
+PAID_SERVICES_KIND // 31402 — kind 31402 paid API service announcement
+```
+
+---
+
+## Types
+
+### `BoothConfigLike`
+
+Toll-booth pricing configuration. Maps endpoint paths to prices.
+
+```typescript
+interface BoothConfigLike {
+  pricing: Record<string, number | PriceInfo | Record<string, number | PriceInfo>>
+  serviceName?: string
+  hasBackend?: boolean
+  xcashu?: { mints: string[] }           // Cashu ecash payment support
+  ietfPayment?: { realm: string }        // IETF Payment authentication (draft-ryan-httpauth-payment-01)
+}
+```
+
+Pricing examples:
+
+```typescript
+// Simple: flat sats per path
+pricing: { '/route': 10 }
+
+// Mixed: sats and USD
+pricing: { '/route': { sats: 10, usd: 0.02 } }
+
+// Nested: default plus per-method overrides
+pricing: { '/route': { default: 10, POST: 15 } }
+```
+
+### `PriceInfo`
+
+```typescript
+interface PriceInfo {
+  sats?: number
+  usd?: number
+}
+```
+
+### `AnnounceOptions` — see `announce()` above
+
+### `ServeOptions` — see `serve()` above
+
+### `DvmHandle` — see `serve()` above
+
+### `Announcement` — see `announce()` above
+
+---
+
+## Security details
+
+- Secret keys are zeroised after use (`sk.fill(0)`); the hex string cannot be zeroised (JS strings are immutable)
+- `FinalizationRegistry` zeroises the key if the `DvmHandle` is GC'd without calling `close()`
+- Deduplication via in-memory seen map with 10-minute TTL, capped at 100k entries
+- Path validation: decodes percent-encoding before checking for `..` and `//` traversal
+- HTTP method validation: only GET/POST/PUT/PATCH/DELETE forwarded to upstream
+- Event age validation: rejects kind 5800 events with `created_at` more than 10 minutes from now
+- Payment hash validated as 64-char hex before polling; `statusToken` URL-encoded in query string
+
+---
+
+## Examples
+
+The `examples/` directory contains ready-to-run demos:
+
+- `examples/local-demo.ts` — full L402 flow with a mock toll-booth server (zero external setup required)
+- `examples/announce.ts` — publish a NIP-89 discovery event to relays
+- `examples/serve.ts` — start the relay loop against a real toll-booth endpoint
+
+---
+
+## Links
+
+- [npm](https://www.npmjs.com/package/toll-booth-dvm)
+- [GitHub](https://github.com/forgesworn/toll-booth-dvm)
+- [@forgesworn/toll-booth](https://www.npmjs.com/package/@forgesworn/toll-booth) — the upstream API gating middleware
+- [NIP-90](https://github.com/nostr-protocol/nips/blob/master/90.md) — Data Vending Machines
+- [NIP-89](https://github.com/nostr-protocol/nips/blob/master/89.md) — Application Handlers
