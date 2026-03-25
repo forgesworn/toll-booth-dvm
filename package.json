@@ -1,6 +1,6 @@
 {
   "name": "toll-booth-dvm",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Expose any toll-booth-gated API as a NIP-90 Data Vending Machine on Nostr",
   "type": "module",
   "main": "./build/index.js",

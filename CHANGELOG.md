@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/forgesworn/toll-booth-dvm/compare/v1.1.0...v1.2.0) (2026-03-25)
+
+
+### Features
+
+* publish kind 31402 paid service announcement alongside NIP-89 handler ([f7154cb](https://github.com/forgesworn/toll-booth-dvm/commit/f7154cbfec8756cacc43d12782ae92ffa8b53fa2))
+
 # [1.1.0](https://github.com/forgesworn/toll-booth-dvm/compare/v1.0.1...v1.1.0) (2026-03-24)
 
 
