@@ -1,5 +1,7 @@
 # toll-booth-dvm
 
+[![GitHub Sponsors](https://img.shields.io/github/sponsors/TheCryptoDonkey?logo=githubsponsors&color=ea4aaa&label=Sponsor)](https://github.com/sponsors/TheCryptoDonkey)
+
 **Nostr:** [`npub1mgvlrnf5hm9yf0n5mf9nqmvarhvxkc6remu5ec3vf8r0txqkuk7su0e7q2`](https://njump.me/npub1mgvlrnf5hm9yf0n5mf9nqmvarhvxkc6remu5ec3vf8r0txqkuk7su0e7q2)
 
 Expose any [toll-booth](https://github.com/forgesworn/toll-booth)-gated HTTP API as a [NIP-90](https://github.com/nostr-protocol/nips/blob/master/90.md) Data Vending Machine on Nostr.
