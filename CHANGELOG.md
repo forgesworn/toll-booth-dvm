@@ -1,3 +1,10 @@
+## [1.2.1](https://github.com/forgesworn/toll-booth-dvm/compare/v1.2.0...v1.2.1) (2026-04-12)
+
+
+### Bug Fixes
+
+* resolve development dependency vulnerabilities ([527e733](https://github.com/forgesworn/toll-booth-dvm/commit/527e73302c4528a83a51e9cc428d533c09f205cb))
+
 # [1.2.0](https://github.com/forgesworn/toll-booth-dvm/compare/v1.1.0...v1.2.0) (2026-03-25)
 
 
