@@ -55,4 +55,4 @@ examples/
 
 ## Release
 
-Semantic-release on push to main. Do not manually bump versions.
+`forgesworn/anvil@v0` on push to main. `auto-release.yml` bumps the version and creates a GitHub Release; `release.yml` runs pre-publish gates and publishes to npm via OIDC. Do not manually bump versions.
