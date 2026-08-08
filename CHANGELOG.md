@@ -1,3 +1,19 @@
+## [2.0.0](https://github.com/forgesworn/toll-booth-dvm/compare/v1.2.1...v2.0.0) (2026-08-08)
+
+Security-hardening release.
+
+### Bug Fixes
+
+- **Paid results are no longer broadcast in cleartext.** Kind-6800 result content is NIP-44-encrypted to the requesting pubkey (with an `['encrypted']` tag per NIP-90 convention). Previously any relay observer could read every paid response the DVM produced without paying.
+- **Fail-closed proxy configuration.** `allowedPaths` is now required at startup (pass `['*']` to explicitly opt into allow-all). Previously omitting it exposed every path on the upstream origin — typically a loopback service — to anonymous Nostr users, bypassing the paywall on any route that returns 200.
+- **Default methods restricted to GET/POST.** Operators opt into PUT/PATCH/DELETE via the new `allowedMethods` option.
+
+### Breaking Changes
+
+- `serve()` throws at startup unless `allowedPaths` is provided.
+- Mutating methods (PUT/PATCH/DELETE) are rejected unless listed in `allowedMethods`.
+- Kind-6800 result `content` is NIP-44-encrypted; clients must decrypt with the DVM pubkey.
+
 ## [1.2.1](https://github.com/forgesworn/toll-booth-dvm/compare/v1.2.0...v1.2.1) (2026-04-12)
 
 
