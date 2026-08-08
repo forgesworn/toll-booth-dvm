@@ -58,7 +58,7 @@ const dvm = await serve({
     pricing: { '/route': 10 },
   },
   about: 'Lightning-paid routing API',
-  allowedPaths: ['/route', '/matrix'], // optional path whitelist
+  allowedPaths: ['/route', '/matrix'], // required path whitelist (['*'] allows all)
 })
 
 // Graceful shutdown
@@ -75,7 +75,8 @@ process.on('SIGINT', () => dvm.close())
 | `announceOnStart` | `false` | Publish kind 31990 on startup |
 | `boothConfig` | — | Required if `announceOnStart` is true |
 | `about` | — | Service description for announcements |
-| `allowedPaths` | — | Whitelist of permitted request paths |
+| `allowedPaths` | required | Whitelist of permitted request paths; `['*']` explicitly opts into allow-all |
+| `allowedMethods` | `['GET', 'POST']` | Permitted HTTP methods — opt in to `PUT`/`PATCH`/`DELETE` only if needed |
 | `pollIntervalMs` | `2000` | Payment settlement poll interval |
 | `maxPendingJobs` | `10` | Max concurrent in-flight jobs |
 | `requestTimeoutMs` | `30000` | Upstream HTTP request timeout |
@@ -102,13 +103,13 @@ Clients send kind 5800 events with `param` tags describing the HTTP request:
 
 | Tag | Values | Description |
 |-----|--------|-------------|
-| `param method` | `GET`, `POST`, etc. | HTTP method (default: `GET`) |
+| `param method` | `GET`, `POST` by default | HTTP method (default: `GET`); mutating methods only if the operator opts in via `allowedMethods` |
 | `param path` | `/route` | Path on the upstream endpoint |
 | `param body` | JSON string | Request body for POST/PUT |
 | `param accept` | MIME type | Forwarded as `Accept` header |
 | `bid` | millisats | Optional max price — job is rejected if price exceeds bid |
 
-Results are published as kind 6800 with the response body in `content`. Errors and payment requests arrive as kind 7000 feedback events.
+Results are published as kind 6800 with the response body NIP-44-encrypted to the requester's pubkey in `content`, signalled by an `['encrypted']` tag — paid responses are never exposed in cleartext on public relays. Clients decrypt using the conversation key derived from their own secret key and the DVM's pubkey. Errors and payment requests arrive as cleartext kind 7000 feedback events (they contain no upstream response data).
 
 ## How it works
 
@@ -117,7 +118,7 @@ Results are published as kind 6800 with the response body in `content`. Errors a
 3. If the endpoint returns **HTTP 402**, the DVM publishes a kind 7000 feedback event with `status: payment-required` and an `amount` tag containing the bolt11 invoice.
 4. The client pays the Lightning invoice out-of-band.
 5. The DVM polls the endpoint's `/invoice-status/{hash}` route until settlement is confirmed.
-6. Once settled, the DVM retries the original request with the L402 `Authorization` header and publishes the response as kind 6800.
+6. Once settled, the DVM retries the original request with the L402 `Authorization` header and publishes the response as kind 6800, NIP-44-encrypted to the requester.
 
 The DVM never holds the bolt11 string for longer than needed — it is relayed directly from the upstream endpoint to the Nostr event and then discarded.
 
@@ -131,7 +132,9 @@ The DVM never holds the bolt11 string for longer than needed — it is relayed d
 
 **No persistent client data.** The DVM does not log or store client pubkeys, job contents, or payment data beyond the in-memory deduplication window (10 minutes). No data is persisted to disk.
 
-**Input validation.** All client-supplied paths are percent-decoded and validated against traversal attacks before forwarding. HTTP methods are restricted to GET/POST/PUT/PATCH/DELETE. Events older than 10 minutes are rejected. Payment hashes are validated as 64-character hex strings.
+**Input validation.** All client-supplied paths are percent-decoded and validated against traversal attacks before forwarding. Events older than 10 minutes are rejected. Payment hashes are validated as 64-character hex strings.
+
+**Upstream exposure.** The DVM makes the upstream origin reachable by any Nostr user — including loopback or private-network services that were never meant to be internet-facing. The `allowedPaths` whitelist is the primary access control and is required at startup; pass `['*']` only if you genuinely intend to expose every path. HTTP methods default to GET/POST — opt in to `PUT`/`PATCH`/`DELETE` via `allowedMethods` only for paths that need them. Note that any whitelisted route which returns 200 (rather than 402) is served for free, so keep the whitelist tight.
 
 ## Examples
 

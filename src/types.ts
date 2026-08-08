@@ -60,8 +60,18 @@ export interface ServeOptions {
   requestTimeoutMs?: number
   /** Time to wait for Lightning settlement in ms. Default: 300000. */
   paymentTimeoutMs?: number
-  /** Whitelist of permitted request paths. Omit to allow all. */
-  allowedPaths?: string[]
+  /**
+   * Whitelist of permitted request paths (required). The DVM exposes the
+   * upstream origin to any Nostr user, so this is the primary access control.
+   * Pass `['*']` to explicitly opt into allow-all.
+   */
+  allowedPaths: string[]
+  /**
+   * HTTP methods permitted for proxied requests. Default: `['GET', 'POST']`.
+   * Opt in to mutating methods (`PUT`, `PATCH`, `DELETE`) only if the
+   * whitelisted paths require them.
+   */
+  allowedMethods?: string[]
   /** Max request body size in bytes. Default: 65536. */
   maxBodyBytes?: number
   /** Max upstream response size in bytes. Default: 1048576 (1 MB). */

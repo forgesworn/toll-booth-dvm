@@ -35,6 +35,10 @@ describe('validatePath', () => {
   it('allowedPaths checks against decoded path', () => {
     expect(() => validatePath('/api/%69sochrone', ['/api/isochrone'])).not.toThrow()
   })
+  it("['*'] opts into allow-all while traversal checks still apply", () => {
+    expect(() => validatePath('/any/path', ['*'])).not.toThrow()
+    expect(() => validatePath('/api/../admin', ['*'])).toThrow('Invalid path')
+  })
 })
 
 describe('validateMethod', () => {
@@ -43,6 +47,18 @@ describe('validateMethod', () => {
   })
   it('allows POST', () => {
     expect(() => validateMethod('POST')).not.toThrow()
+  })
+  it('rejects DELETE by default', () => {
+    expect(() => validateMethod('DELETE')).toThrow('Method not allowed')
+  })
+  it('rejects PUT and PATCH by default', () => {
+    expect(() => validateMethod('PUT')).toThrow('Method not allowed')
+    expect(() => validateMethod('PATCH')).toThrow('Method not allowed')
+  })
+  it('allows mutating methods when operator opts in', () => {
+    const methods = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
+    expect(() => validateMethod('DELETE', methods)).not.toThrow()
+    expect(() => validateMethod('delete', methods)).not.toThrow()
   })
   it('rejects CONNECT', () => {
     expect(() => validateMethod('CONNECT')).toThrow('Method not allowed')

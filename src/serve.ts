@@ -1,4 +1,5 @@
 import { finalizeEvent, getPublicKey } from 'nostr-tools/pure'
+import { v2 as nip44 } from 'nostr-tools/nip44'
 import { SimplePool } from 'nostr-tools/pool'
 import type { ServeOptions, DvmHandle } from './types.js'
 import { JOB_KIND, RESULT_KIND, FEEDBACK_KIND } from './constants.js'
@@ -31,6 +32,15 @@ const skRegistry = new FinalizationRegistry<Uint8Array>((sk) => sk.fill(0))
 export async function serve(options: ServeOptions): Promise<DvmHandle> {
   validateSecretKey(options.secretKey)
 
+  // Fail fast: the path whitelist is the primary access control between the
+  // public Nostr relay network and the upstream origin. Require an explicit
+  // ['*'] for operators who genuinely want allow-all.
+  if (!Array.isArray(options.allowedPaths) || options.allowedPaths.length === 0) {
+    throw new Error(
+      "allowedPaths is required: provide a whitelist of upstream paths, or ['*'] to explicitly allow all",
+    )
+  }
+
   const {
     relays,
     endpoint,
@@ -39,9 +49,15 @@ export async function serve(options: ServeOptions): Promise<DvmHandle> {
     requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
     paymentTimeoutMs = DEFAULT_PAYMENT_TIMEOUT_MS,
     allowedPaths,
+    allowedMethods,
     maxBodyBytes = DEFAULT_MAX_BODY_BYTES,
     maxResponseBytes,
   } = options
+
+  // undefined → proxy.ts safe default (GET/POST)
+  const methodSet = allowedMethods
+    ? new Set(allowedMethods.map((m) => m.toUpperCase()))
+    : undefined
 
   const sk = hexToBytes(options.secretKey)
   const dvmPubkey = getPublicKey(sk)
@@ -98,7 +114,7 @@ export async function serve(options: ServeOptions): Promise<DvmHandle> {
     abortControllers.set(event.id, controller)
 
     try {
-      validateMethod(params.method)
+      validateMethod(params.method, methodSet)
     } catch {
       await publishFeedback(event, 'error', 'method-not-allowed')
       return
@@ -226,17 +242,24 @@ export async function serve(options: ServeOptions): Promise<DvmHandle> {
     return Promise.all(pool.publish(relays, feedbackEvent))
   }
 
+  // Result content is NIP-44-encrypted to the requesting pubkey so paid
+  // responses cannot be harvested by eavesdroppers subscribing to public
+  // relays. The ['encrypted'] tag signals this per NIP-90 convention.
   function publishResult(event: JobEvent, body: string, amountSats?: number): Promise<unknown> {
+    const conversationKey = nip44.utils.getConversationKey(sk, event.pubkey)
+    const content = nip44.encrypt(body, conversationKey)
+    conversationKey.fill(0)
     const tags: string[][] = [
       ['e', event.id, relayHint],
       ['p', event.pubkey],
       ['request', JSON.stringify(event)],
+      ['encrypted'],
     ]
     if (amountSats !== undefined) tags.push(['amount', String(amountSats * 1000)])
     const resultEvent = finalizeEvent(
       {
         kind: RESULT_KIND,
-        content: body,
+        content,
         tags,
         created_at: Math.floor(Date.now() / 1000),
       },

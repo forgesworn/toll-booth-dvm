@@ -1,4 +1,6 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest'
+import { v2 as nip44 } from 'nostr-tools/nip44'
+import { hexToBytes } from '../src/utils.js'
 
 // --- Hoisted mocks (accessible inside vi.mock factories) ---
 
@@ -59,13 +61,30 @@ import { SimplePool } from 'nostr-tools/pool'
 import { JOB_KIND, FEEDBACK_KIND, RESULT_KIND } from '../src/constants.js'
 
 const SECRET_KEY = 'a'.repeat(64)
+const REQUESTER_SK = 'e'.repeat(64)
+
+// Real keypairs (derived with unmocked nostr-tools) so NIP-44 encryption in
+// publishResult operates on valid curve points.
+let requesterPubkey: string
+let dvmRealPubkey: string
+
+beforeAll(async () => {
+  const { getPublicKey } = await vi.importActual<typeof import('nostr-tools/pure')>('nostr-tools/pure')
+  requesterPubkey = getPublicKey(hexToBytes(REQUESTER_SK))
+  dvmRealPubkey = getPublicKey(hexToBytes(SECRET_KEY))
+})
+
+function decryptForRequester(content: string): string {
+  const conversationKey = nip44.utils.getConversationKey(hexToBytes(REQUESTER_SK), dvmRealPubkey)
+  return nip44.decrypt(content, conversationKey)
+}
 
 function makeJobEvent(overrides: Partial<{
   id: string; pubkey: string; tags: string[][]; content: string
 }> = {}) {
   return {
     id: overrides.id ?? 'job-1',
-    pubkey: overrides.pubkey ?? 'requester-pubkey',
+    pubkey: overrides.pubkey ?? requesterPubkey,
     kind: JOB_KIND,
     content: overrides.content ?? '',
     tags: overrides.tags ?? [
@@ -97,8 +116,30 @@ describe('serve', () => {
     ).rejects.toThrow('secretKey must be 64 hex characters')
   })
 
+  it('throws at startup when allowedPaths is missing', async () => {
+    await expect(
+      serve({ secretKey: SECRET_KEY, relays: ['wss://r.test'], endpoint: 'https://e.test' }),
+    ).rejects.toThrow('allowedPaths is required')
+  })
+
+  it('throws at startup when allowedPaths is empty', async () => {
+    await expect(
+      serve({ secretKey: SECRET_KEY, relays: ['wss://r.test'], endpoint: 'https://e.test', allowedPaths: [] }),
+    ).rejects.toThrow('allowedPaths is required')
+  })
+
+  it('accepts explicit allow-all opt-in via allowedPaths: [\'*\']', async () => {
+    const handle = await serve({
+      secretKey: SECRET_KEY,
+      relays: ['wss://r.test'],
+      endpoint: 'https://e.test',
+      allowedPaths: ['*'],
+    })
+    await handle.close()
+  })
+
   it('subscribes to kind 5800 filtered by #p with DVM pubkey', async () => {
-    const handle = await serve({ secretKey: SECRET_KEY, relays: ['wss://r.test'], endpoint: 'https://e.test' })
+    const handle = await serve({ secretKey: SECRET_KEY, relays: ['wss://r.test'], endpoint: 'https://e.test', allowedPaths: ['/api/test'] })
 
     const pool = vi.mocked(SimplePool).mock.instances[0] as unknown as { subscribeMany: ReturnType<typeof vi.fn> }
     expect(pool.subscribeMany).toHaveBeenCalledWith(
@@ -113,7 +154,7 @@ describe('serve', () => {
   it('deduplicates events by ID', async () => {
     mockProxyRequest.mockResolvedValue({ status: 'success', body: '{"ok":true}', contentType: 'application/json' })
 
-    const handle = await serve({ secretKey: SECRET_KEY, relays: ['wss://r.test'], endpoint: 'https://e.test' })
+    const handle = await serve({ secretKey: SECRET_KEY, relays: ['wss://r.test'], endpoint: 'https://e.test', allowedPaths: ['/api/test'] })
     const event = makeJobEvent()
 
     subscribeManyState.callback!(event)
@@ -128,10 +169,10 @@ describe('serve', () => {
     await handle.close()
   })
 
-  it('publishes kind 6800 result on successful proxy', async () => {
+  it('publishes kind 6800 result NIP-44-encrypted to the requester', async () => {
     mockProxyRequest.mockResolvedValue({ status: 'success', body: '{"data":"ok"}', contentType: 'application/json' })
 
-    const handle = await serve({ secretKey: SECRET_KEY, relays: ['wss://r.test'], endpoint: 'https://e.test' })
+    const handle = await serve({ secretKey: SECRET_KEY, relays: ['wss://r.test'], endpoint: 'https://e.test', allowedPaths: ['/api/test'] })
     subscribeManyState.callback!(makeJobEvent())
 
     await new Promise((r) => setTimeout(r, 50))
@@ -140,7 +181,13 @@ describe('serve', () => {
       (call) => (call[1] as { kind: number }).kind === RESULT_KIND,
     )
     expect(resultCall).toBeDefined()
-    expect((resultCall![1] as { content: string }).content).toBe('{"data":"ok"}')
+    const resultEvent = resultCall![1] as { content: string; tags: string[][] }
+    // Cleartext body must not appear anywhere in the published event
+    expect(resultEvent.content).not.toBe('{"data":"ok"}')
+    expect(resultEvent.content).not.toContain('data')
+    expect(resultEvent.tags).toContainEqual(['encrypted'])
+    // Decryption round-trip with the requester key recovers the body
+    expect(decryptForRequester(resultEvent.content)).toBe('{"data":"ok"}')
 
     await handle.close()
   })
@@ -166,6 +213,7 @@ describe('serve', () => {
       secretKey: SECRET_KEY,
       relays: ['wss://r.test'],
       endpoint: 'https://e.test',
+      allowedPaths: ['/api/test'],
       paymentTimeoutMs: 50,
       pollIntervalMs: 10,
     })
@@ -204,6 +252,7 @@ describe('serve', () => {
       secretKey: SECRET_KEY,
       relays: ['wss://r.test'],
       endpoint: 'https://e.test',
+      allowedPaths: ['/api/test'],
       maxPendingJobs: 2,
     })
 
@@ -231,6 +280,7 @@ describe('serve', () => {
       secretKey: SECRET_KEY,
       relays: ['wss://r.test'],
       endpoint: 'https://e.test',
+      allowedPaths: ['/api/test'],
       announceOnStart: true,
       boothConfig,
       about: 'My DVM',
@@ -260,6 +310,7 @@ describe('serve', () => {
       secretKey: SECRET_KEY,
       relays: ['wss://r.test'],
       endpoint: 'https://e.test',
+      allowedPaths: ['/api/test'],
     })
 
     const event = makeJobEvent({
@@ -306,6 +357,7 @@ describe('serve', () => {
       secretKey: SECRET_KEY,
       relays: ['wss://r.test'],
       endpoint: 'https://e.test',
+      allowedPaths: ['/api/test'],
       paymentTimeoutMs: 50,
       pollIntervalMs: 10,
     })
@@ -326,6 +378,25 @@ describe('serve', () => {
     await handle.close()
   })
 
+  it('passes configured allowedMethods to validateMethod', async () => {
+    mockProxyRequest.mockResolvedValue({ status: 'success', body: 'ok', contentType: 'text/plain' })
+
+    const handle = await serve({
+      secretKey: SECRET_KEY,
+      relays: ['wss://r.test'],
+      endpoint: 'https://e.test',
+      allowedPaths: ['/api/test'],
+      allowedMethods: ['GET', 'POST', 'DELETE'],
+    })
+    subscribeManyState.callback!(makeJobEvent())
+
+    await new Promise((r) => setTimeout(r, 50))
+
+    expect(mockValidateMethod).toHaveBeenCalledWith('GET', new Set(['GET', 'POST', 'DELETE']))
+
+    await handle.close()
+  })
+
   it('publishes error for invalid path', async () => {
     // Make validatePath throw for this test
     mockValidatePath.mockImplementation(() => {
@@ -336,6 +407,7 @@ describe('serve', () => {
       secretKey: SECRET_KEY,
       relays: ['wss://r.test'],
       endpoint: 'https://e.test',
+      allowedPaths: ['/api/test'],
     })
     subscribeManyState.callback!(makeJobEvent({
       tags: [
@@ -386,6 +458,7 @@ describe('serve', () => {
       secretKey: SECRET_KEY,
       relays: ['wss://r.test'],
       endpoint: 'https://e.test',
+      allowedPaths: ['/api/test'],
       pollIntervalMs: 10,
       paymentTimeoutMs: 5000,
     })
@@ -398,19 +471,23 @@ describe('serve', () => {
     const secondCall = mockProxyRequest.mock.calls[1][0]
     expect(secondCall.l402).toEqual({ macaroon: 'mac-token', preimage: 'd'.repeat(64) })
 
-    // Result should be published
+    // Result should be published encrypted, with the amount tag
     const resultCall = mockPublish.mock.calls.find(
       (call) => (call[1] as { kind: number }).kind === RESULT_KIND,
     )
     expect(resultCall).toBeDefined()
-    expect((resultCall![1] as { content: string }).content).toBe('{"paid":"data"}')
+    const resultEvent = resultCall![1] as { content: string; tags: string[][] }
+    expect(resultEvent.content).not.toBe('{"paid":"data"}')
+    expect(resultEvent.tags).toContainEqual(['encrypted'])
+    expect(resultEvent.tags).toContainEqual(['amount', '100000'])
+    expect(decryptForRequester(resultEvent.content)).toBe('{"paid":"data"}')
 
     vi.unstubAllGlobals()
     await handle.close()
   })
 
   it('close() cleans up subscription and pool', async () => {
-    const handle = await serve({ secretKey: SECRET_KEY, relays: ['wss://r.test'], endpoint: 'https://e.test' })
+    const handle = await serve({ secretKey: SECRET_KEY, relays: ['wss://r.test'], endpoint: 'https://e.test', allowedPaths: ['/api/test'] })
 
     await handle.close()
 

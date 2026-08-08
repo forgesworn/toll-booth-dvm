@@ -47,7 +47,9 @@ examples/
 - Secret keys are zeroised after use (`sk.fill(0)`) — the hex string cannot be zeroised (JS strings are immutable)
 - Deduplication via in-memory seen map with 10-minute TTL, capped at 100k entries
 - Path validation: decodes percent-encoding before checking for `..` and `//` traversal
-- HTTP method validation: only GET/POST/PUT/PATCH/DELETE forwarded to upstream
+- HTTP method validation: GET/POST by default; operators opt into PUT/PATCH/DELETE via `allowedMethods`
+- `allowedPaths` whitelist is required at startup (`['*']` is the explicit allow-all opt-in)
+- Kind 6800 result content is NIP-44-encrypted to the requester's pubkey and flagged with an `['encrypted']` tag; conversation key is zeroised after use
 - Event age validation: rejects events with `created_at` >10 minutes from now
 - Payment hash validated as 64-char hex before polling; statusToken URL-encoded in query string
 - Non-custodial: bolt11 strings are relayed, never stored beyond the request lifecycle

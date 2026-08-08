@@ -46,7 +46,9 @@ export interface ProxyError {
 /** Discriminated union of all possible proxy outcomes. */
 export type ProxyResult = ProxySuccess | ProxyPaymentRequired | ProxyError
 
-const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
+// Safe default: read-only-ish methods. Operators opt into PUT/PATCH/DELETE
+// via the serve() allowedMethods option.
+const ALLOWED_METHODS = new Set(['GET', 'POST'])
 
 /**
  * Validate a request path against traversal attacks and an optional whitelist.
@@ -71,7 +73,8 @@ export function validatePath(path: string, allowedPaths?: string[]): void {
   if (path.includes('..')) throw new Error('Invalid path: contains ..')
   if (path.includes('//')) throw new Error('Invalid path: contains //')
 
-  if (allowedPaths && !allowedPaths.includes(decoded)) {
+  // '*' is an explicit operator opt-in to allow-all (traversal checks above still apply)
+  if (allowedPaths && !allowedPaths.includes('*') && !allowedPaths.includes(decoded)) {
     throw new Error(`Path not allowed: ${decoded}`)
   }
 }
