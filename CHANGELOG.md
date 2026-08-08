@@ -23,6 +23,14 @@ Security-hardening release.
 
 # [1.2.0](https://github.com/forgesworn/toll-booth-dvm/compare/v1.1.0...v1.2.0) (2026-03-25)
 
+## 2.0.1 (2026-08-08)
+
+### Bug Fixes
+
+- encrypt paid results and fail closed on proxy config
+
+
+
 
 ### Features
 
