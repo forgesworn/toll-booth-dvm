@@ -1,6 +1,6 @@
 # toll-booth-dvm
 
-> Connecting paid HTTP APIs to Nostr's AI marketplace is hard — you need to
+> Connecting paid HTTP APIs to Nostr's AI marketplace is hard: you need to
 > handle NIP-90 job events, relay Lightning invoices, poll for settlement, and
 > publish results, all without holding funds. toll-booth-dvm is a TypeScript
 > library that bridges any toll-booth-gated API to Nostr as a Data Vending
@@ -8,8 +8,8 @@
 
 Operators who already gate their APIs with toll-booth can expose them to Nostr
 clients with two function calls: `announce` (publish a NIP-89 discovery event)
-and `serve` (start the relay loop). The DVM handles the full L402 payment flow
-— relaying bolt11 invoices, polling for settlement, retrying with credentials —
+and `serve` (start the relay loop). The DVM handles the full L402 payment flow,
+relaying bolt11 invoices, polling for settlement and retrying with credentials,
 without ever holding or forwarding funds.
 
 ## Getting Started
@@ -31,6 +31,7 @@ const dvm = await serve({
     pricing: { '/route': 10 },
   },
   about: 'Lightning-paid routing API',
+  allowedPaths: ['/route'],
 })
 
 process.on('SIGINT', () => dvm.close())
@@ -38,22 +39,24 @@ process.on('SIGINT', () => dvm.close())
 
 ## Key Concepts
 
-- **announce** — publishes a NIP-89 kind 31990 handler event so Nostr clients can discover your DVM
-- **serve** — subscribes to kind 5800 job requests, proxies them to your toll-booth endpoint, and publishes kind 6800 results
-- **L402 flow** — when the upstream returns HTTP 402, the DVM relays the Lightning invoice to the client via a kind 7000 feedback event, polls for settlement, then retries with the L402 credential
-- **Non-custodial** — the DVM never holds funds; payments settle directly between client wallet and toll-booth backend
-- **Path validation** — optional allowedPaths whitelist prevents clients from accessing unintended endpoints
+- **announce**: publishes a NIP-89 kind 31990 handler event so Nostr clients can discover your DVM
+- **serve**: subscribes to kind 5800 job requests, proxies them to your toll-booth endpoint, and publishes kind 6800 results
+- **L402 flow**: when the upstream returns HTTP 402, the DVM relays the Lightning invoice to the client via a kind 7000 feedback event, polls for settlement, then retries with the L402 credential
+- **Non-custodial**: the DVM never holds funds; payments settle directly between client wallet and toll-booth backend
+- **Access control**: `allowedPaths` is a required whitelist (pass `['*']` to explicitly allow all); `allowedMethods` defaults to GET/POST, with PUT/PATCH/DELETE opt-in
+- **Result privacy**: kind 6800 result content is NIP-44-encrypted to the requesting pubkey and flagged with an `['encrypted']` tag, so paid responses are never exposed in cleartext on public relays
 
 ## API Surface
 
-- `announce(boothConfig, options)` — publish a NIP-89 discovery event to relays
-- `serve(options)` — start the relay loop; returns a `DvmHandle` with `close()`
-- `ServeOptions` — configuration: secretKey, relays, endpoint, allowedPaths, timeouts, limits
-- `BoothConfigLike` — pricing configuration mapped from toll-booth's format
-- `JOB_KIND` (5800), `RESULT_KIND` (6800), `FEEDBACK_KIND` (7000), `HANDLER_KIND` (31990) — Nostr event kind constants
+- `announce(boothConfig, options)`: publish a NIP-89 discovery event to relays
+- `serve(options)`: start the relay loop; returns a `DvmHandle` with `close()`
+- `ServeOptions`: configuration: secretKey, relays, endpoint, allowedPaths (required), allowedMethods, timeouts, limits
+- `BoothConfigLike`: pricing configuration mapped from toll-booth's format
+- `JOB_KIND` (5800), `RESULT_KIND` (6800), `FEEDBACK_KIND` (7000), `HANDLER_KIND` (31990), `PAID_SERVICES_KIND` (31402): Nostr event kind constants
+- `hexToBytes(hex)`: convert a 64-character hex secret key string to a 32-byte `Uint8Array`
 
 ## Examples
 
-- `examples/local-demo.ts` — run the full L402 flow locally with a mock server (zero setup)
-- `examples/announce.ts` — publish a NIP-89 discovery event
-- `examples/serve.ts` — start the relay loop against a real endpoint
+- `examples/local-demo.ts`: run the full L402 flow locally with a mock server (zero setup)
+- `examples/announce.ts`: publish a NIP-89 discovery event
+- `examples/serve.ts`: start the relay loop against a real endpoint

@@ -139,7 +139,8 @@ Parameters — `ServeOptions`:
 | `maxPendingJobs` | `number?` | `10` | Max concurrent in-flight jobs |
 | `requestTimeoutMs` | `number?` | `30000` | Upstream HTTP request timeout in ms |
 | `paymentTimeoutMs` | `number?` | `300000` | Time to wait for Lightning settlement in ms |
-| `allowedPaths` | `string[]?` | (all) | Whitelist of permitted request paths |
+| `allowedPaths` | `string[]` | required | Whitelist of permitted request paths; pass `['*']` to explicitly opt into allow-all |
+| `allowedMethods` | `string[]?` | `['GET', 'POST']` | Permitted HTTP methods; opt in to `PUT`/`PATCH`/`DELETE` only for paths that need them |
 | `maxBodyBytes` | `number?` | `65536` | Max request body size in bytes |
 | `maxResponseBytes` | `number?` | `1048576` | Max upstream response size in bytes (1 MB) |
 | `proxy` | `string?` | — | SOCKS5 proxy URL (stub — not yet implemented) |
