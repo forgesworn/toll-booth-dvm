@@ -13,7 +13,9 @@
   },
   "files": [
     "build",
-    "context7.json"
+    "context7.json",
+    "llms.txt",
+    "llms-full.txt"
   ],
   "scripts": {
     "build": "tsc",
