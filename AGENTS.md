@@ -1,15 +1,66 @@
-# AGENTS.md — toll-booth-dvm
+# AGENTS.md: toll-booth-dvm
 
-See [CLAUDE.md](CLAUDE.md) for full agent instructions including architecture, build/test commands, conventions, and implementation details.
+TypeScript library that bridges toll-booth-gated HTTP APIs to Nostr as NIP-90
+Data Vending Machines. Two main exports: `announce` (publish a NIP-89
+discovery event) and `serve` (relay loop handling the L402 payment flow).
 
-## Quick reference
+## Build & test
 
 ```bash
-npm ci && npm run build && npm test
+npm ci
+npm run build    # tsc → build/
+npm test         # vitest run
 ```
 
-- TypeScript, strict mode, ESM
-- Single runtime dependency: `nostr-tools`
-- British English spelling
-- Commit format: `type: description`
-- Secret keys must be zeroised after use
+## Structure
+
+```
+src/
+  index.ts: public exports (announce, serve, types, constants)
+  announce.ts: publish kind 31990 NIP-89 handler event
+  serve.ts: relay loop: subscribe to kind 5800, proxy, handle L402, publish kind 6800
+  proxy.ts: HTTP proxy with path validation and L402 retry
+  mapper.ts: convert BoothConfigLike → NIP-89 event tags/content
+  slugify.ts: deterministic identifier from service name
+  constants.ts: Nostr event kind constants (5800, 6800, 7000, 31990, 31402)
+  types.ts: public TypeScript interfaces
+  utils.ts: hex conversion, secret key validation
+tests/
+  *.test.ts: unit tests (vitest, mocked dependencies)
+  integration.test.ts: end-to-end tests (real HTTP server, real nostr-tools, no mocks)
+examples/
+  local-demo.ts: full L402 flow with mock server (zero setup)
+  announce.ts: publish NIP-89 discovery event
+  serve.ts: start relay loop
+```
+
+## Conventions
+
+- British English (colour, initialise, behaviour, licence)
+- Commit messages: `type: description` (feat:, fix:, docs:, refactor:)
+- Amounts in satoshis (smallest unit)
+- No Co-Authored-By lines in commits
+- Single runtime dependency (nostr-tools). Keep it minimal.
+
+## Key implementation details
+
+- Secret keys are zeroised after use (`sk.fill(0)`); the hex string cannot be zeroised (JS strings are immutable)
+- `FinalizationRegistry` zeroises the key if the `DvmHandle` is garbage-collected without calling `close()`
+- Deduplication via in-memory seen map with 10-minute TTL, capped at 100k entries
+- Path validation: decodes percent-encoding before checking for `..` and `//` traversal
+- `allowedPaths` whitelist is required at startup (`['*']` is the explicit allow-all opt-in)
+- HTTP method validation: GET/POST by default; operators opt into PUT/PATCH/DELETE via `allowedMethods`
+- Kind 6800 result content is NIP-44-encrypted to the requester's pubkey and flagged with an `['encrypted']` tag; conversation key is zeroised after use
+- Event age validation: rejects events with `created_at` >10 minutes from now
+- Payment hash validated as 64-char hex before polling; statusToken URL-encoded in query string
+- Non-custodial: bolt11 strings are relayed, never stored beyond the request lifecycle
+- L402 credential format: `L402 {macaroon}:{preimage}` in the `Authorization` header (`src/proxy.ts`)
+
+## Common pitfalls
+
+- `allowedPaths` is required in `ServeOptions`; omitting it throws at startup rather than defaulting to allow-all
+- Kind 6800 content is encrypted; do not read it directly from a relay subscription without decrypting with the conversation key
+
+## Release
+
+`forgesworn/anvil@v0` on push to main. `auto-release.yml` bumps the version and creates a GitHub Release; `release.yml` runs pre-publish gates and publishes to npm via OIDC. Do not manually bump versions.
